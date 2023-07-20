@@ -1,9 +1,23 @@
 [0;33m[1m
---------- Resultados host [ 192.168.1.41 ]--------
+--------- Resultados host [ 3.3.3.1 ]--------
 [0m[0m
 [0;32m[1m
- 	 Port 80 TCP --> open[0m[0m
+ 	 Port 135 TCP --> open[0m[0m
 [0;32m[1m
- 	 Port 631 TCP --> open[0m[0m
+ 	 Port 139 TCP --> open[0m[0m
 [0;32m[1m
- 	 Port 631 TCP --> open[0m[0m
+ 	 Port 445 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 3389 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 5357 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 5040 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 5800 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 7680 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 5900 TCP --> open[0m[0m
+[0;32m[1m
+ 	 Port 49669 TCP --> open[0m[0m

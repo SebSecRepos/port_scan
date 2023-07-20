@@ -35,7 +35,7 @@ grayColour="\e[0;37m\033[1m"
 
 ${endColour}"
 
-sleep 3
+sleep 1
 
 
 base_ifaces=$(ifconfig | grep "flags" | grep -v "LOOPBACK" | cut -d ":" -f1)
@@ -52,7 +52,7 @@ netmask=0
 netsOct=0
 hostsOct=0
 hostInNetToScann=""
-selectToScann="No selected"
+selectedIp="No selected"
 
 
 function ctrl_c(){
@@ -64,7 +64,70 @@ function ctrl_c(){
 trap ctrl_c INT
 
 
+function arpDiscover(){ 
+    clear
+    processCounter=0;
 
+    echo -e "\n \t           ${greenColour} IP /${redColour} mac            |       ${turquoiseColour}SO${endColour}"
+    echo -e "${redColour}----------------------------------------------------------------------------- ${endColour}"
+
+    echo -e "$1" | while read -r line
+        do
+            if [ $processCounter > 50 ]; then
+                wait
+                processCounter=0
+            fi;
+            (($processCounter++));
+            ( 
+                ip=$(echo $line | awk '{print $1}' )
+                mac=$(echo $line | awk '{print $3}')
+                ttl=$(timeout 0.3 ping -c 1 "$ip" | grep "ttl" | awk '{print $6}' | tr -d "ttl=" &) 
+                so=""
+
+                if [ "$ttl" ]; then
+
+                    if [ "${ttl}" == "64" ]; then
+                        so="${purpleColour}Linux/Android/Mac  ${endColour}"
+                    elif [ "${ttl}" == "255" ]; then
+                        so=" Unix/Linux/FreeBSD/macOS"
+                    elif [ "${ttl}" == "32" ] || [ "${ttl}" == "128" ]; then
+                        so="${turquoiseColour} Windows ${endColour}"
+                    fi
+                    echo -e "\n \t ${greenColour} $ip / ${redColour}$mac  ${grayColour}  ( $so / ttl --> $ttl) ${endColour}"  
+                else
+                    echo -e "\n \t ${greenColour} $ip / ${redColour}$mac  ${grayColour}  ( ttl Desconocido)"  
+                fi
+            )&
+        done;
+    sleep 2
+    echo -e "\n"
+    echo -e "\n"
+    echo -e "${greenColour}===========================  Información  ===================================${endColour}\n"
+    echo -e " \t ${greenColour}[Colocar ip]${endColour} ---> ${grayColour}Seleccionar un equipo${endColour}"
+    echo -e "\n \t ${redColour}[0]${endColour} ---> Atras \n"
+    echo -e "${turquoiseColour}\n (ctrl + mayus + up) Para subir  \n ${endColour}"
+
+}
+
+function validateSelectedIp(){
+
+    echo $1| grep $2  | grep -vE "IP|mac|SO" 
+    if [ $? -ne 0 ]; then
+        echo "Opción inválida (Saliendo al menú..)"
+    else
+        echo "isvalid es $isValid"
+        clear
+        echo -e "${grayColour} \n  ------------------------------------------------- \n${endColour}"
+        echo -e "${greenColour} \n \t  ¡Host ${yellowColour} ${2} ${endColour} ${greenColour}seleccionado!\n ${endColour}"
+        echo -e "${grayColour} \n ------------------------------------------------- \n${endColour}"
+        echo "Presione una tecla ir al menú de escaneo"
+        read -rs -p"";echo
+        
+        optionsScann "$2"
+        select_scann "$2"
+    fi
+
+}
 
 
 function selectIface(){  #Función que selecciona la interfaz
@@ -154,107 +217,28 @@ function ifaceInfo(){  #Muestra información de la interfaz
     fi
 }
 
-
 function host_list(){ #Escaneo en búsqueda de dispositivos dentro de la red
     clear
 
-    if [ "$selectedIface" != "No seleccionado" ];
-        then
-        echo -e "${yellowColour}=================  Equipos en red  ==================${endColour}"
+    if [ "$selectedIface" != "No seleccionado" ];then
 
+            selectedIp="No selected"
+            allHosts=$(arp | grep -v "Address") 
+
+            arpDiscover "$allHosts"
             
-                declare -i counter=0
-                selectToScann="No selected"
-                
-                IFS='.' read -r a b c d <<< "$netIp"  #Dividimos la ip en 4 variables abcd como delimitador usamos "."
-                ((d=0))
-                allHosts=$( for ((i=1; i<=$hosts; i++)); do
-                    ((d++))
-                    if ((d > 255)); then
-                        d=0
-                        ((c++))
-                        if ((c > 255)); then
-                        c=0
-                        ((b++))
-                        if ((b > 255)); then
-                            b=0
-                            ((a++))
-                        fi
-                        fi
-                    fi
-                    
-                    echo -e "${a}.${b}.${c}.${d}\n"
-                    done
-                    )
+            read selectedIp
 
-               
-               hostInNetInfo=$(echo -e $allHosts | sed 's/ /\n/g' | while read -r line; 
-                do
-                   ( 
-                    ttl=$(timeout 1 ping -c 1 $line | grep "ttl=" | awk '{print $6}' | sed 's/ttl=//g' | tr -d "\t")
-                    so=""
-                    if [ $ttl ]; then
-            
-                        if [ ${ttl} == 64 ]; then
-                            so="${purpleColour}Linux/Android/Mac  ${endColour}"
-                        elif [ ${ttl} == 255 ]; then
-                            so=" Unix/Linux/FreeBSD/macOS"
-                        elif [ ${ttl} == 32 ] || [ ${ttl} == 128 ]; then
-                            so="${turquoiseColour} Windows ${endColour}"
-                        fi
-                        echo -e "\n \t [$line] ---> ${grayColour}  Posibles Sistemas Operativos=( $so / ttl --> $ttl) ${endColour}"  
-                    fi
-                   )&
-                done; wait)
 
-            
-
-                hostInNetToScann="$( echo -e "$hostInNetInfo" | awk '{print $1}' | tr -d '[' | tr -d ']' )"
-                clear
-                echo -e "${yellowColour}===========================  Equipos en la red  ===================================${endColour}"
-                echo -e "$hostInNetInfo\n"
-                echo -e "\n"
-                echo -e " \t ${greenColour}[Colocar ip]${endColour} ---> ${grayColour}Seleccionar un equipo${endColour}"
-                echo -e " \t ${blueColour}[A]${endColour} ---> ${grayColour}Escanear todos los equipos (Puede demorar)${endColour}"
-                echo -e "\n \t ${redColour}[0]${endColour} ---> Atras \n"
-                echo -e "${greenColour}===========================  Información  ===================================${endColour}\n"
-
-                echo -e "${greenColour} Ingresar número ip para escanear puertos del equipos ${endColour}\n"
-                echo -e "${greenColour} Ingresa A para escanear todos los equipos ${endColour}\n"
-                echo -e "${turquoiseColour}\n (ctrl + mayus + up) Para subir  \n ${endColour}"
-                read selectToScann
-
-                echo "$hostInNetInfo" | grep -F "$selectToScann"
-
-                if [ $? -ne 0 ] && [ "$selectToScann" != "A" ] && [ "$selectToScann" != "0" ];then
-                    echo "Opción inválida (Saliendo al menú..)"
-                elif [ "$selectToScann" -eq "0" ];
-                then
-                    selectToScann="No selected"
+            case $selectedIp in
+                0)  
+                    selectedIp="No selected"
                     clear
-                elif [ "$selectToScann" == "A" ];
-                then
-
-                    optionsScann "Todos los equipos"
-                    select_scann
-                    clear
-                    optionsScann="No selected"
-
-                else
-                    hostInNetToScann=$(echo -e "$hostInNetToScann" | grep -F "$selectToScann" | tr -d '[' | tr -d ']')
-                    clear
-                    echo -e "${grayColour} \n  ------------------------------------------------- \n${endColour}"
-                    echo -e "${greenColour} \n \t  ¡Host ${yellowColour} ${hostInNetToScann} ${endColour} ${greenColour}seleccionado!\n ${endColour}"
-                    echo -e "${grayColour} \n ------------------------------------------------- \n${endColour}"
-                    echo "Presione una tecla ir al menú de escaneo"
-                    read -rs -p"";echo
-                    
-                    optionsScann $hostInNetToScann
-                    select_scann 
-                    clear
-                fi
-            
-        clear
+                ;;
+                *)
+                    validateSelectedIp "$allHosts" "$selectedIp"
+                ;;
+            esac
 
         else
             clear
@@ -283,18 +267,12 @@ function select_scann(){
 
     case $scann_type in
         1)  
-            escaneo_base 
+            escaneo_base $1
             host_list
         ;;
         2)
-            if [ $selectToScann == "A" ];then
-                clear
-                echo "No se puede realizar un escaneo extenso de todos los equipos"
-                echo "Presione una tecla para continuar"
-                read -s -p"pre";echo 
-            else
-                escaneo_extenso 
-            fi
+            
+            escaneo_extenso 
             host_list
         ;;
         0)
@@ -311,26 +289,19 @@ function select_scann(){
 function escaneo_base(){
 	clear
 
-     if [ ${#hostInNetToScann} -le 5 ]; then
-
-        clear
-    else
 	   echo "${yellowColour}======== Escaneo básico TCP ==========${endColour}"
 		hostWithPorts="0"
         clear
         tput bold; echo -e "${redColour} [!] ${endColour} Escaneando puertos, espere porfavor ..."
 		
-        echo -e "$hostInNetToScann" | sed 's/ /\n/g' | while read -r line; do
 
-            if [ ${#line} -ge 1 ]; then
-                echo -e "${yellowColour}\n--------- Resultados host [ $line ]--------\n${endColour}" | tee ./portLog.txt
-                cat ./portList.txt | while read -r port;
-                    do
-                        ((timeout 1 echo "" > /dev/tcp/$line/$port)2>/dev/null && echo -e "${greenColour}\n \t Port $port TCP --> open${endColour}" | tee -a ./portLog.txt) &
-                    done; wait
-                    sleep 0.001
-            fi
-           done; wait
+            echo -e "${yellowColour}\n--------- Resultados host [ $1 ]--------\n${endColour}" | tee ./portLog.txt
+            cat ./portList.txt | while read -r port;
+                do
+                    ((timeout 1 echo "" > /dev/tcp/$1/$port)2>/dev/null && echo -e "${greenColour}\n \t Port $port TCP --> open${endColour}" | tee -a ./portLog.txt) &
+                done; wait
+                sleep 0.001
+            
             sleep 1
             echo -e "\n${blueColour} Finalizando escaneo..${endColour}\n"
             sleep 3
@@ -339,8 +310,7 @@ function escaneo_base(){
         echo "Presiona una tecla para continuar"
         read -rs -p "pres ";echo 
         clear
-        
-    fi
+ 
 }
 
 function escaneo_extenso(){
