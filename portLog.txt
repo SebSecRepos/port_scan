@@ -3,27 +3,3 @@
 ------------ Resultados host [  ] ------------
 
 [0m[0m
-	 
- [0;32m[1mPort 135 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 139 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 445 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 902 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 912 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 1042 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 1043 TCP --> open 
-[0m[0m
-	 
- [0;32m[1mPort 3389 TCP --> open 
-[0m[0m

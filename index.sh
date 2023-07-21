@@ -10,7 +10,6 @@ purpleColour="\e[0;35m\033[1m"
 turquoiseColour="\e[0;36m\033[1m"
 grayColour="\e[0;37m\033[1m"
 
-
 (
 
 
@@ -34,6 +33,8 @@ grayColour="\e[0;37m\033[1m"
           ========= Bienvenido/a a Port scan ==========⠀    
 
 ${endColour}"
+
+if [[ "$(whoami)" != "root" ]]; then echo -e "\n${redColour}[!] Are you root?${endColour}\n";exit 1; fi
 
 sleep 1
 
@@ -61,7 +62,7 @@ function ctrl_c(){
 trap ctrl_c INT
 
 
-function arpDiscover(){ 
+function ipAnalyze(){ 
     clear
     processCounter=0;
 
@@ -119,7 +120,7 @@ function validateSelectedIp(){
         echo -e "${grayColour} \n  ------------------------------------------------- \n${endColour}"
         echo -e "${greenColour} \n \t  ¡Host ${yellowColour} ${2} ${endColour} ${greenColour}seleccionado!\n ${endColour}"
         echo -e "${grayColour} \n ------------------------------------------------- \n${endColour}"
-        echo "Presione una tecla ir al menú de escaneo"
+        echo "Presiona una tecla para continuar"
         read -rs -p"";echo
         
         optionsScann "$2"
@@ -164,6 +165,7 @@ function selectIface(){  #Función que selecciona la interfaz
         #Seleccionada la interfaz, asignamos las variables de red
         echo -e "${grayColour}\n ------------------------------------------------- \n${endColour}"
         echo -e "${greenColour}\n ¡Adaptador ${selectedIface} seleccionado!\n${endColour}"
+        echo -e "${greenColour}\n Presione una tecla para continuar\n${endColour}"
         echo -e "${grayColour}\n ------------------------------------------------- \n${endColour}"
 
         ip=$(ifconfig "$selectedIface" | grep broadcast | awk '{print $2}')
@@ -220,7 +222,7 @@ function host_list(){ #Escaneo en búsqueda de dispositivos dentro de la red
         clear
     else
         
-        arpDiscover "$allHosts"
+        ipAnalyze "$allHosts"
         read "selectedIp"
 
         case $selectedIp in
@@ -245,7 +247,7 @@ function optionsScann(){
     echo -e " \t ${greenColour}[0] ${endColour} ${grayColour} atras.. \n ${endColour}"
     echo -e "${redColour} \n---------------------------------  Información  ----------------------------------------------\n ${endColour}"
     echo -e "${greenColour} \n [1]  -  Utilizá un diccionario de puertos\n ${endColour}"
-    echo -e "${greenColour} \n [2]  -  Asegurese que su equipo cuenta con los recursos necesarios [ son 65536 puertos ] (Solo un equipo por escaneo)\n ${endColour}"
+    echo -e "${greenColour} \n [2]  -  Escanear 65535 puertos \n ${endColour}"
     echo -e "${grayColour} \n Seleccione una opción\n ${endColour}"
 
 }
@@ -269,9 +271,11 @@ function select_scann(){
             clear
         ;;
         *)
-            optionsScann $1
             echo -e "\n Opción inválida \n"
+            clear
+            optionsScann $1
             read scann_type
+            host_list
         ;;
         esac
 }
@@ -309,20 +313,8 @@ function escaneo_extenso(){
     tput cnorm; echo -e "\n ${redColour} [!] Escaneando 65535 puertos ${yellowColour} \n\n------------ Resultados host [ $1 ] ------------\n\n${endColour}"   
     echo -e "\t ${yellowColour} \n\n------------ Resultados host [ $hostInNetToScann ] ------------\n\n${endColour}" > ./portLog.txt
     
-    processCounter=0;
-    for port in $(seq 1 65536);
-    do  
-        (($processCounter++));
-
-        if (( $processCounter > 30 )); then
-            wait
-            processCounter=0
-         fi
-
-        (( timeout 0.6 echo "" > "/dev/tcp/$1/$port")2>/dev/null && echo -e "\t \n ${greenColour}Port $port TCP --> open \n${endColour}" | tee -a ./portLog.txt) &
-        
-    done; wait
-    
+    seq 0 65535 | xargs -P 70 -I {} timeout 0.5 bash -c "echo \"\" > /dev/tcp/${1}/{} &>/dev/null && echo -e \"\n\t${greenColour}Port {} TCP --> open \n${endColour}\"" 2>/dev/null
+   
     echo -e "\n${blueColour} Finalizando escaneo..${endColour}\n"
     echo -e "\n ${redColour}No hay mas puertos abiertos${endColour} \n"
 
@@ -352,7 +344,7 @@ function options(){  #Muestra las opciones y elige el menú
 
 
 
-function menuifaces(){
+function main(){
     clear
 
     case $menuOpt in
@@ -403,7 +395,7 @@ function menuifaces(){
 
 while [ true ]; do
     clear
-    menuifaces
+    main
 done
 
 )2>/dev/null
