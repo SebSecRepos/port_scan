@@ -48,9 +48,6 @@ declare -i base=0
 declare -i ips=0
 hosts=0
 ip=0
-netmask=0
-netsOct=0
-hostsOct=0
 hostInNetToScann=""
 selectedIp="No selected"
 
@@ -70,17 +67,17 @@ function arpDiscover(){
 
     echo -e "\n \t           ${greenColour} IP /${redColour} mac            |       ${turquoiseColour}SO${endColour}"
     echo -e "${redColour}----------------------------------------------------------------------------- ${endColour}"
-
+    
     echo -e "$1" | while read -r line
         do
             if [ $processCounter > 50 ]; then
-                wait
+                wait;
                 processCounter=0
-            fi;
+            fi
             (($processCounter++));
             ( 
-                ip=$(echo $line | awk '{print $1}' )
-                mac=$(echo $line | awk '{print $3}')
+                ip=$(echo $line | cut -d "/" -f2)
+                mac=$(echo $line | cut -d "/" -f1)
                 ttl=$(timeout 0.3 ping -c 1 "$ip" | grep "ttl" | awk '{print $6}' | tr -d "ttl=" &) 
                 so=""
 
@@ -95,7 +92,7 @@ function arpDiscover(){
                     fi
                     echo -e "\n \t ${greenColour} $ip / ${redColour}$mac  ${grayColour}  ( $so / ttl --> $ttl) ${endColour}"  
                 else
-                    echo -e "\n \t ${greenColour} $ip / ${redColour}$mac  ${grayColour}  ( ttl Desconocido)"  
+                    echo -e "\n \t ${greenColour} $ip / ${redColour}$mac  ${grayColour}  ( ttl Desconocido )"  
                 fi
             )&
         done;
@@ -114,6 +111,8 @@ function validateSelectedIp(){
     echo $1| grep $2  | grep -vE "IP|mac|SO" 
     if [ $? -ne 0 ]; then
         echo "Opción inválida (Saliendo al menú..)"
+        sleep 1
+        clear
     else
         echo "isvalid es $isValid"
         clear
@@ -131,9 +130,11 @@ function validateSelectedIp(){
 
 
 function selectIface(){  #Función que selecciona la interfaz
+
+    rm ./table.tmp &>/dev/null     # Borramos tabla arp previa
     clear
     declare -i index=0  
-    declare -i number=0
+    declare -i ifaceOpt=0
 
     echo -e "${purpleColour}------------  Adaptadores disponibles  ----------------\n\n${endColour}"
 
@@ -149,11 +150,11 @@ function selectIface(){  #Función que selecciona la interfaz
     echo -e "${purpleColour}--------------------------------------------------------${endolour}\n"
     echo -e "${grayColour}[!] Seleccione opción por número: \n${endColour}"
 
-    read number
+    read ifaceOpt
 
-    selectedIface="$( echo -e "$listed_ifaces" | grep -F "[$number]" | awk '{print $4}')" #Al grepear [$number], no falla la validación
+    selectedIface="$( echo -e "$listed_ifaces" | grep -F "[$ifaceOpt]" | awk '{print $4}')" 
 
-    if [ $number -eq 0 ]; then
+    if [ $ifaceOpt -eq 0 ]; then
         selectedIface="No seleccionado"
         echo "Presione una tecla para continuar"
         read -rs -p" Presione";echo
@@ -165,9 +166,10 @@ function selectIface(){  #Función que selecciona la interfaz
         echo -e "${greenColour}\n ¡Adaptador ${selectedIface} seleccionado!\n${endColour}"
         echo -e "${grayColour}\n ------------------------------------------------- \n${endColour}"
 
-        ip=$(ifconfig $selectedIface | head -n 2 | tail -n 1 | awk '{print $2}')
-        netmask=$(ifconfig $selectedIface | head -n 2 | tail -n 1 | awk '{print $4}')
-        netPrefix=$(ip a | grep $selectedIface | tail -n 1 | awk '{print $2}' | cut -d "/" -f2)
+        ip=$(ifconfig "$selectedIface" | grep broadcast | awk '{print $2}')
+        netPrefix=$(ip a | grep eth0 | grep inet | cut -d "/" -f2 | awk '{print $1}')
+
+        netmask=$(ifconfig "$selectedIface "| head -n 2 | tail -n 1 | awk '{print $4}')
 		netIp=$(ip route | grep "proto kernel" | awk '{print $1}' | cut -d "/" -f1 )
         let base="32 - $netPrefix"
 
@@ -175,17 +177,6 @@ function selectIface(){  #Función que selecciona la interfaz
         let hosts="$ips - 2"
         baseIp=0
 
-        if [ $netPrefix -le 8 ]; then
-            netsOct=1
-        elif [ $netPrefix -le 16 ]; then
-            netsOct=2
-        elif [ $netPrefix -le 24 ]; then
-            netsOct=3
-        fi
-
-        baseIp=$( echo "$ip" | cut -d "." -f1-${netsOct})
-        let hostsOct="4 - $netsOct"
-        echo "Presione una tecla para continuar"
         read -rs -p" Presione";echo
         clear
     else
@@ -202,10 +193,10 @@ function ifaceInfo(){  #Muestra información de la interfaz
     clear
     if [ "$selectedIface" != "No seleccionado" ];
     then
-   
+
         echo -e "${turquoiseColour}\n -------------- Información de adaptador ${yellowColour}[ $selectedIface ]${endColour} ${turquoiseColourColour}---------------\n\n${endColour}"
         echo -e "\t ${greenColour}IP:${grayColour} $ip \n ${endColour}"
-        echo -e "\t ${greenColour}Máscara de subred:${grayColour} $netmask /$netPrefix\n${endColour}"
+        echo -e "\t ${greenColour}Prefijo de subred:${grayColour} $netPrefix\n${endColour}"
         echo -e "\t ${greenColour}Cantidad posible de host:${grayColour} $hosts \n${endColour}"
 
         echo -e "${turquoiseColour}\n -----------------------------------------------------------------------------\n${endColour}"
@@ -219,30 +210,29 @@ function ifaceInfo(){  #Muestra información de la interfaz
 
 function host_list(){ #Escaneo en búsqueda de dispositivos dentro de la red
     clear
+  
+    selectedIp="No selected"
+    allHosts=$(./utils/arp.sh "$selectedIface" &>/dev/null && cat ./table.tmp) 
+    if [[ ! $allHosts ]]; then 
+        echo -e "\n${redColour}[!] No hay hosts${endColour}"
+        echo -e "\n${yellowColour}Presione una tecla para continuar${endColour}"
+        read
+        clear
+    else
+        
+        arpDiscover "$allHosts"
+        read "selectedIp"
 
-    if [ "$selectedIface" != "No seleccionado" ];then
-
-            selectedIp="No selected"
-            allHosts=$(arp | grep -v "Address") 
-
-            arpDiscover "$allHosts"
-            
-            read selectedIp
-
-
-            case $selectedIp in
-                0)  
-                    selectedIp="No selected"
-                    clear
-                ;;
-                *)
-                    validateSelectedIp "$allHosts" "$selectedIp"
-                ;;
-            esac
-
-        else
-            clear
-        fi
+        case $selectedIp in
+            "0")  
+                selectedIp="No selected"
+                clear
+            ;;
+            *)
+                validateSelectedIp "$allHosts" "$selectedIp"
+            ;;
+        esac
+    fi
 }
 
 function optionsScann(){
@@ -272,7 +262,7 @@ function select_scann(){
         ;;
         2)
             
-            escaneo_extenso 
+            escaneo_extenso $1
             host_list
         ;;
         0)
@@ -315,33 +305,37 @@ function escaneo_base(){
 
 function escaneo_extenso(){
 	clear
-    if [ ${#hostInNetToScann} -le 5 ]; then
-        clear
-    else
-        
-        tput cnorm; echo -e "\n ${redColour} [!] Escaneando los 65536 puertos posibles, esto demorará mucho ... ${yellowColour} \n\n------------ Resultados host [ $hostInNetToScann ] ------------\n\n${endColour}"   
-        echo -e " ${blueColour} Si el escaneo demora demasiado salir con ctrl + c ${endColour}"
-        echo -e "\t ${yellowColour} \n\n------------ Resultados host [ $hostInNetToScann ] ------------\n\n${endColour}" > ./portLog.txt
-        for port in $(seq 1 65536);
-		do  
-            (( timeout 1 echo "" > "/dev/tcp/$hostInNetToScann/$port")2>/dev/null && echo -e "\t \n ${greenColour}Port $port TCP --> open \n${endColour}" | tee -a ./portLog.txt) &
-            sleep 0.001
-        done; wait
-        sleep 1
-        echo -e "\n${blueColour} Finalizando escaneo..${endColour}\n"
-        sleep 3
-        echo -e "\n ${redColour}No hay mas puertos abiertos${endColour} \n"
+ 
+    tput cnorm; echo -e "\n ${redColour} [!] Escaneando 65535 puertos ${yellowColour} \n\n------------ Resultados host [ $1 ] ------------\n\n${endColour}"   
+    echo -e "\t ${yellowColour} \n\n------------ Resultados host [ $hostInNetToScann ] ------------\n\n${endColour}" > ./portLog.txt
     
-        echo "Presiona una tecla para continuar"
-        read -rs -p "pres ";echo 
-        tput cnorm
-        clear
-    fi
+    processCounter=0;
+    for port in $(seq 1 65536);
+    do  
+        (($processCounter++));
+
+        if (( $processCounter > 30 )); then
+            wait
+            processCounter=0
+         fi
+
+        (( timeout 0.6 echo "" > "/dev/tcp/$1/$port")2>/dev/null && echo -e "\t \n ${greenColour}Port $port TCP --> open \n${endColour}" | tee -a ./portLog.txt) &
+        
+    done; wait
+    
+    echo -e "\n${blueColour} Finalizando escaneo..${endColour}\n"
+    echo -e "\n ${redColour}No hay mas puertos abiertos${endColour} \n"
+
+    echo "Presiona una tecla para continuar"
+    read -rs -p "pres ";echo 
+    tput cnorm
+    clear
+    
 }
 
 
 
-function ifacesopt(){  #Muestra las opciones y elige el menú
+function options(){  #Muestra las opciones y elige el menú
     echo -e "${purpleColour}\n------------  Adaptador actual:${endColour} ${grayColour}[ $selectedIface ]${endColour} ${purpleColour}------------------\n\n${endColour}"
     echo -e "\t ${greenColour}[ 1 ]${endColour} ---> Seleccionar adaptador de red \n"
     echo -e "\t ${greenColour}[ 2 ]${endColour} ---> Ver log último escaneo \n"
@@ -360,10 +354,11 @@ function ifacesopt(){  #Muestra las opciones y elige el menú
 
 function menuifaces(){
     clear
+
     case $menuOpt in
         1) 
             selectIface
-            ifacesopt
+            options
             read menuOpt
         ;;
         2) 
@@ -373,21 +368,21 @@ function menuifaces(){
             echo "Presione una tecla para continuar"
             read -s -p"pre";echo 
             clear
-            ifacesopt
+            options
             read menuOpt
         ;;
         3) 
-            host_list
-            ifacesopt
+            host_list "$selectedIface"
+            options
             read menuOpt
         ;;
         4) 
             ifaceInfo
-            ifacesopt
+            options
             read menuOpt
         ;;
         "")
-            ifacesopt
+            options
             read menuOpt
         ;;
         0) 
@@ -395,7 +390,7 @@ function menuifaces(){
         ;;
         *)
             echo "Opción inválida"
-            ifacesopt
+            options
             read menuOpt
         ;;
     esac
